@@ -16,6 +16,7 @@ from urllib.parse import unquote, quote
 
 def home(request):
     return render(request, 'core/home.html')
+    
 @csrf_protect
 def upload_pdf(request):
     if request.method == 'POST':
@@ -29,10 +30,8 @@ def upload_pdf(request):
                 for chunk in pdf_file.chunks():
                     destination.write(chunk)
             
-            # Generate podcast title from PDF content
-            with open(temp_path, 'rb') as f:
-                pdf_content = f.read()
-            podcast_title = generate_podcast_title(pdf_content, settings.OPENAI_API_KEY)
+            # PDFファイル名をポッドキャストタイトルとして使用
+            podcast_title = original_filename
             
             # URLエンコードを行う
             encoded_podcast_title = quote(podcast_title)
