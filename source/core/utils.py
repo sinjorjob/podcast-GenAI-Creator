@@ -41,7 +41,7 @@ def get_mp3(text: str, voice: str, api_key: str) -> bytes:
                 file.write(chunk)
             return file.getvalue()
 
-def generate_audio(file_path: str, openai_api_key: str) -> Tuple[str, str]:
+def generate_audio(file_path: str, openai_api_key: str, special_instructions: str = '') -> Tuple[str, str]:
     if file_path.endswith('.pdf'):
         with Path(file_path).open("rb") as f:
             reader = PdfReader(f)
@@ -55,7 +55,7 @@ def generate_audio(file_path: str, openai_api_key: str) -> Tuple[str, str]:
     @retry(retry=retry_if_exception_type(ValidationError))
     @llm(model="gpt-4o-mini")
 
-    def generate_dialogue(text: str) -> Dialogue:
+    def generate_dialogue(text: str, special_instructions: str) -> Dialogue:
         """
         Your task is to take the input text provided and turn it into an engaging, informative podcast dialogue in Japanese. The input text may be messy or unstructured, as it could come from a variety of sources like PDFs or web pages. Don't worry about the formatting issues or any irrelevant information; your goal is to extract the key points and interesting facts that could be discussed in a Japanese podcast.
 
@@ -65,7 +65,9 @@ def generate_audio(file_path: str, openai_api_key: str) -> Tuple[str, str]:
         {text}
         </input_text>
 
-        First, carefully read through the input text and identify the main topics, key points, and any interesting facts or anecdotes. Think about how you could present this information in a fun, engaging way that would be suitable for an audio podcast.
+        Additionally, here are some special instructions to consider:
+        
+        First, carefully read through the input text and identify the main topics, key points, and any interesting facts or anecdotes. Think about how you could present this information in a fun, engaging way that would be suitable for an audio podcast. Make sure to incorporate the special instructions provided above.
 
         <scratchpad>
         以下の点を考慮しながら、入力テキストから抽出した主要なトピックやポイントについて、クリエイティブな議論の方法をブレインストーミングしてください：
@@ -75,28 +77,36 @@ def generate_audio(file_path: str, openai_api_key: str) -> Tuple[str, str]:
         3. 入力テキストのギャップを埋めたり、ポッドキャストで探求できる思考を促す質問を考える方法
         4. 情報提供と娯楽のバランスを取りながら、クリエイティブなアプローチを取る方法
 
+
         ここに、日本語でブレインストーミングのアイデアとポッドキャストの対話の大まかな概要を書いてください。最後に繰り返したい主要な洞察や要点を必ず記述してください。
         </scratchpad>
 
-        Now that you have brainstormed ideas and created a rough outline, it's time to write the actual podcast dialogue in Japanese. Aim for a natural, conversational flow between the host and any guest speakers. Incorporate the best ideas from your brainstorming session and make sure to explain any complex topics in an easy-to-understand way.
+        Now that you have brainstormed ideas and created a rough outline, it's time to write the actual podcast dialogue in Japanese. Aim for a natural, conversational flow between the host and any guest speakers. Incorporate the best ideas from your brainstorming session and make sure to explain any complex topics in an easy-to-understand way. Remember to address the special instructions provided earlier.
 
         <podcast_dialogue>
-        ブレインストーミングセッションで考えた主要なポイントやクリエイティブなアイデアに基づいて、魅力的で情報量の多いポッドキャストの対話を以下に日本語で書いてください。以下の点に注意してください：
-
-        1. 自然な会話調を使用し、一般の聴衆にも理解できるように必要な文脈や説明を含めてください。
+        ブレインストーミングセッションで考えた主要なポイントやクリエイティブなアイデア、そして特別な指示に基づいて、魅力的で可能な限り情報量の多いポッドキャストの対話を日本語で書いてください。以下の点に注意してください：
+        
+        0. {special_instructions}
+        1. 一般の聴衆にも理解できるように必要な文脈や説明を含めてください。
         2. ゲストは入力テキスト内で裏付けられていない内容を含めてはいけません。
         3. 音声として読み上げられることを想定して出力をデザインしてください。これは直接音声に変換されます。
         4. [ホスト]や[ゲスト]などの括弧付きのプレースホルダーは使用しないでください。
         5. ホストやゲストは相手の話を注意深く聞いてから発言しますが、互いに話を途中で遮ることでテンポよく会話を進めることが出来ます。
         6. スクリプトをリアルにするために、「そうですね」「なるほど」などの相づちや、「えーと」や「あの」などの考え込む様子を表す表現を適切に使用してください。
         7. トピックに沿って魅力的な流れを維持しながら、できるだけ長く詳細な対話を作成してください。
-        8. 入力テキストからの重要な情報を楽しい方法で伝えながら、可能な限り長いポッドキャストエピソードを作成することを目指してください。
+        8. 入力テキストからの重要な情報を漏れなく抽出して、楽しい方法で伝えながら、可能な限り長いポッドキャストエピソードを作成することを目指してください。
 
-        対話の最後に、ホストとゲストスピーカーが自然に議論の主な洞察と要点をまとめるようにしてください。これは会話から自然に流れ出すようにし、カジュアルで会話的な方法で主要なポイントを繰り返すようにしてください。明らかな要約のように聞こえないようにし、締めくくる前に中心的なアイデアを最後にもう一度強調してリスナーの印象に残すことが目標です。
+        
+        対話の最後に、ホストとゲストスピーカーが自然に議論の主な洞察と要点をまとめるようにしてください。これは会話から自然に流れ出すようにし、カジュアルで会話的な方法で主要なポイントを繰り返すようにしてください。明らかな要約のように聞こえないようにし、締めくくる前に中心的なアイデアを最後にもう一度強調してリスナーの印象に残すことが目標です。特別な指示に関連する重要なポイントも必ず含めてください。
         </podcast_dialogue>
         """
-
+    # プロンプトの内容を表示
+    formatted_prompt = generate_dialogue.__doc__.format(text=text, special_instructions=special_instructions)
+    print("Generated Prompt:")
+    print(formatted_prompt)
+        
     llm_output = generate_dialogue(text)
+    print("llm_output=", llm_output)
 
     audio = b""
     transcript = ""
@@ -239,7 +249,7 @@ def format_transcript_with_gpt(transcript, timestamped_transcript, api_key):
     #print("prompt=",prompt)
     response = client.chat.completions.create(
         temperature=0.1,
-        model="gpt-4o",
+        model="gpt-4o-mini",
         messages=[
             {"role": "system", "content": "You are a helpful assistant that formats transcripts."},
             {"role": "user", "content": prompt}
@@ -275,7 +285,7 @@ def update_formatted_transcript(timestamped_transcript, formatted_transcript, ap
     """
     print("修正用プロンプト＝",prompt)
     response = client.chat.completions.create(
-        model="gpt-4o",
+        model="gpt-4o-mini",
         temperature=0.1,
         messages=[
             {"role": "system", "content": "You are a helpful assistant that updates transcripts."},
@@ -293,7 +303,7 @@ def generate_podcast_title(input_text, api_key, max_length=50):
     prompt = f"""
 Generate a concise and descriptive title for a podcast based on the following text in japanese. The title should be catchy, informative, and no longer than {max_length} characters:
 
-{input_text[:500]}  # Using first 500 characters to keep the prompt short
+{input_text[:3000]}  # Using first 3000 characters to keep the prompt short
 
 Output the title only, without any additional text or formatting.
 """

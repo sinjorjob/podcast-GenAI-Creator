@@ -9,6 +9,7 @@ urlpatterns = [
     path('', views.home, name='home'),
     path('upload/', views.upload_pdf, name='upload_pdf'),
     path('generate/<str:input_type>/<str:input_filename>/<str:podcast_title>/', views.generate_podcast, name='generate_podcast'),
+    path('generate/<str:input_type>/<str:input_filename>/<str:podcast_title>/<str:special_instructions>/', views.generate_podcast, name='generate_podcast'),
     path('podcasts/', views.podcast_list, name='podcast_list'),
     path('podcast/<int:podcast_id>/', views.podcast_detail, name='podcast_detail'),
     path('generate_standalone_html/<int:podcast_id>/', views.generate_standalone_html, name='generate_standalone_html'),

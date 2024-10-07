@@ -11,6 +11,8 @@ import json
 from django.http import HttpResponse
 from django.template.loader import render_to_string
 import base64
+import urllib
+from urllib.parse import unquote, quote
 
 def home(request):
     return render(request, 'core/home.html')
@@ -18,72 +20,111 @@ def home(request):
 def upload_pdf(request):
     if request.method == 'POST':
         pdf_file = request.FILES.get('pdf_file')
+        special_instructions = request.POST.get('special_instructions', '')
         if pdf_file:
-            # オリジナルのファイル名を取得（拡張子を除く）
             original_filename = os.path.splitext(pdf_file.name)[0]
-            
-            # 一時的なPDFファイルを保存
             temp_filename = f"{uuid.uuid4()}.pdf"
             temp_path = os.path.join(settings.TEMP_ROOT, temp_filename)
             with open(temp_path, 'wb+') as destination:
                 for chunk in pdf_file.chunks():
                     destination.write(chunk)
-            return redirect('generate_podcast', input_type='pdf', input_filename=temp_filename, podcast_title=original_filename)
-            #return redirect('generate_podcast', pdf_filename=temp_filename, podcast_title=original_filename)
+            
+            # Generate podcast title from PDF content
+            with open(temp_path, 'rb') as f:
+                pdf_content = f.read()
+            podcast_title = generate_podcast_title(pdf_content, settings.OPENAI_API_KEY)
+            
+            # URLエンコードを行う
+            encoded_podcast_title = quote(podcast_title)
+            
+            # special_instructions が空でない場合のみ、URLに含める
+            if special_instructions:
+                encoded_special_instructions = quote(special_instructions)
+                return redirect('generate_podcast', 
+                                input_type='pdf', 
+                                input_filename=temp_filename, 
+                                podcast_title=encoded_podcast_title, 
+                                special_instructions=encoded_special_instructions)
+            else:
+                return redirect('generate_podcast', 
+                                input_type='pdf', 
+                                input_filename=temp_filename, 
+                                podcast_title=encoded_podcast_title)
     return redirect('home')
-
 
 @csrf_protect
 def upload_text(request):
     if request.method == 'POST':
         input_text = request.POST.get('input_text')
+        special_instructions = request.POST.get('special_instructions', '')
         if input_text:
             temp_filename = f"{uuid.uuid4()}.txt"
             temp_path = os.path.join(settings.TEMP_ROOT, temp_filename)
             with open(temp_path, 'w', encoding='utf-8') as f:
                 f.write(input_text)
-                
-           # Generate a title based on the input text
             podcast_title = generate_podcast_title(input_text, settings.OPENAI_API_KEY)
-            return redirect('generate_podcast', input_type='text', input_filename=temp_filename, podcast_title=podcast_title)
+            
+            # URLエンコードを行う
+            encoded_podcast_title = quote(podcast_title)
+            
+            # special_instructions が空でない場合のみ、URLに含める
+            if special_instructions:
+                encoded_special_instructions = quote(special_instructions)
+                return redirect('generate_podcast', 
+                                input_type='text', 
+                                input_filename=temp_filename, 
+                                podcast_title=encoded_podcast_title, 
+                                special_instructions=encoded_special_instructions)
+            else:
+                return redirect('generate_podcast', 
+                                input_type='text', 
+                                input_filename=temp_filename, 
+                                podcast_title=encoded_podcast_title)
     return redirect('home')
 
-def generate_podcast(request, input_type, input_filename, podcast_title):
-    decoded_title = unquote(podcast_title)
-    input_path = os.path.join(settings.TEMP_ROOT, input_filename)
-    
-    audio_file_path, transcript = generate_audio(input_path, settings.OPENAI_API_KEY)
-    timestamped_transcript = generate_timestamped_transcript(audio_file_path, settings.OPENAI_API_KEY)
+def generate_podcast(request, input_type, input_filename, podcast_title, special_instructions=None):
+    try:
+        decoded_title = unquote(podcast_title)
+        decoded_special_instructions = unquote(special_instructions) if special_instructions else ''
+        input_path = os.path.join(settings.TEMP_ROOT, input_filename)
+        
+        audio_file_path, transcript = generate_audio(input_path, settings.OPENAI_API_KEY, decoded_special_instructions)
+        timestamped_transcript = generate_timestamped_transcript(audio_file_path, settings.OPENAI_API_KEY)
 
-    formatted_transcript = format_transcript_with_gpt(transcript, timestamped_transcript, settings.OPENAI_API_KEY)
+        formatted_transcript = format_transcript_with_gpt(transcript, timestamped_transcript, settings.OPENAI_API_KEY)
 
-    podcast = Podcast(
-        title=decoded_title,
-        transcript=transcript,
-        timestamped_transcript=timestamped_transcript,
-        formatted_transcript=formatted_transcript
-    )
-    
-    with open(audio_file_path, 'rb') as audio_file:
-        podcast.audio_file.save(f"{uuid.uuid4()}.mp3", audio_file)
-    
-    podcast.save()
+        podcast = Podcast(
+            title=decoded_title,
+            transcript=transcript,
+            timestamped_transcript=timestamped_transcript,
+            formatted_transcript=formatted_transcript
+        )
+        
+        with open(audio_file_path, 'rb') as audio_file:
+            podcast.audio_file.save(f"{uuid.uuid4()}.mp3", audio_file)
+        
+        podcast.save()
 
-    # Update formatted_transcript using the new utility function
-    updated_formatted_transcript = update_formatted_transcript(podcast.timestamped_transcript, podcast.formatted_transcript, settings.OPENAI_API_KEY)
-    
-    # Update the Podcast model
-    podcast.formatted_transcript = updated_formatted_transcript
-    podcast.save()
-    
-    os.remove(input_path)  # 一時ファイルの削除
+        updated_formatted_transcript = update_formatted_transcript(podcast.timestamped_transcript, podcast.formatted_transcript, settings.OPENAI_API_KEY)
+        
+        podcast.formatted_transcript = updated_formatted_transcript
+        podcast.save()
+        
+        os.remove(input_path)
 
-    return render(request, 'core/podcast_result.html', {
-        'audio_url': podcast.audio_file.url,
-        'formatted_transcript': json.dumps(updated_formatted_transcript, ensure_ascii=False),
-        'podcast_id': podcast.id
-    })
-    
+        return JsonResponse({
+            'status': 'success',
+            'audio_url': podcast.audio_file.url,
+            'formatted_transcript': json.dumps(updated_formatted_transcript, ensure_ascii=False),
+            'podcast_id': podcast.id
+        })
+    except Exception as e:
+        return JsonResponse({
+            'status': 'error',
+            'message': f'エラーが発生しました。エラー内容は以下です。{str(e)}'
+        })
+        
+         
 def format_transcript(transcript):
     lines = transcript.split('\n')
     formatted_lines = []
